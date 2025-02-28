@@ -1,7 +1,9 @@
 use futures::TryStream;
 use futures::TryStreamExt;
 
-use crate::try_streamies_structs::collect_result_vec::TryCollectVec;
+pub use try_collect_vec::TryCollectVec;
+
+pub mod try_collect_vec;
 
 pub trait TryStreamies: TryStream {
     /// Collect the stream into a vec.
