@@ -1,13 +1,14 @@
 [package]
 name = "streamies"
 description = "More features for your streams"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["RustyNova"]
 repository = "https://github.com/RustyNova016/streamies"
 readme = "README.md"
 license = "MIT"
 edition = "2021"
 rust-version = "1.82.0"
+keywords = ["stream", "data-structure", "async", "development"]
 
 
 [dependencies]
