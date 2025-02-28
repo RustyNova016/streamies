@@ -11,15 +11,15 @@ pub trait TryStreamies: TryStream {
     /// use futures::stream::{self, StreamExt};
     /// use streamies::TryStreamies as _;
     ///
-    /// let stream = stream::iter(vec![Ok(1), Ok(2), Ok(3)]);
+    /// let stream = stream::iter(vec![Ok::<i32, String>(1), Ok(2), Ok(3)]);
     ///
     /// let result = stream.try_collect_vec().await; // No need for ...: Result<Vec<_>, _>!
-    /// assert_eq!(result, vec![1, 2, 3]);
+    /// assert_eq!(result, Ok(vec![1, 2, 3]));
     ///
     /// // However, this will resul in an error value
     /// let stream = stream::iter(vec![Ok(1), Err("uh oh"), Ok(3)]);
     ///
-    /// let result = stream.try_collect_vec();
+    /// let result = stream.try_collect_vec().await;
     /// assert_eq!(result, Err("uh oh"));
     /// # });
     /// ```

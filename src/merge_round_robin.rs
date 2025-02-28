@@ -3,9 +3,9 @@ use core::pin::Pin;
 use core::task::Context;
 use core::task::Poll;
 
-use futures::Stream;
 use futures::ready;
 use futures::stream::FusedStream;
+use futures::Stream;
 use pin_project_lite::pin_project;
 
 pin_project! {
