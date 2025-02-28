@@ -1,7 +1,14 @@
+pub mod try_streamies;
+pub mod try_streamies_structs;
 pub use futures::{Stream, StreamExt, TryStream, TryStreamExt};
+
+pub use crate::try_streamies::TryStreamies;
 
 pub mod merge_round_robin;
 pub use self::merge_round_robin::MergeRoundRobin;
+
+pub mod streamies_structs;
+use crate::streamies_structs::collect_vec::CollectVec;
 
 pub trait Streamies: Stream {
     /// Merge two streams into one, allowing a custom round robin policy
@@ -43,6 +50,26 @@ pub trait Streamies: Stream {
         Self: Sized,
     {
         MergeRoundRobin::new(self, other, nb_self, nb_other)
+    }
+
+    /// Collect the stream into a vec.
+    ///
+    /// ```
+    /// # futures::executor::block_on(async {
+    /// use futures::stream::{self, StreamExt};
+    /// use streamies::Streamies as _;
+    ///
+    /// let stream = stream::iter(vec![1, 2, 3]);
+    ///
+    /// let result = stream.collect_vec().await; // No need for ...: Vec<_>!
+    /// assert_eq!(result, vec![1, 2, 3]);
+    /// # });
+    /// ```
+    fn collect_vec(self) -> CollectVec<Self>
+    where
+        Self: Sized,
+    {
+        CollectVec::new(self.collect())
     }
 }
 

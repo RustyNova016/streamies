@@ -10,7 +10,7 @@ use pin_project_lite::pin_project;
 
 pin_project! {
     /// Stream for the [`merge_round_robin`](crate::Streamies::merge_round_robin) method.
-    ///  #[derive(Debug)]
+    #[derive(Debug)]
     #[must_use = "streams do nothing unless polled"]
     pub struct MergeRoundRobin<St1, St2> {
         #[pin]
