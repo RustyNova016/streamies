@@ -44,6 +44,18 @@ pub trait Streamies: Stream {
     {
         MergeRoundRobin::new(self, other, nb_self, nb_other)
     }
+
+    /// Same as [`StreamExt::buffered`], but spawn parallel tasks instead of running concurently
+    ///
+    /// To understand the difference between <ins>concurrency</ins> and <ins>parallelism</ins>,
+    /// you can head to the tokio docs for a great [explanation](https://tokio.rs/tokio/tutorial/spawning#concurrency)
+    #[cfg(feature = "tokio")]
+    fn parallel_buffer(self)
+    where
+        Self: Sized,
+    {
+        self.map
+    }
 }
 
 impl<St: Stream> Streamies for St {}
