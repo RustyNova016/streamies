@@ -1,4 +1,8 @@
+pub mod try_streamies;
+pub mod try_streamies_structs;
 pub use futures::{Stream, StreamExt, TryStream, TryStreamExt};
+
+pub use crate::try_streamies::TryStreamies;
 
 pub mod merge_round_robin;
 pub use self::merge_round_robin::MergeRoundRobin;
