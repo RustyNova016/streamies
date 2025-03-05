@@ -1,3 +1,11 @@
+
+use core::future::ready;
+use core::future::Future;
+
+use futures::stream::Map;
+use futures::FutureExt;
+use futures::Stream;
+use futures::StreamExt;
 use futures::TryStream;
 use futures::TryStreamExt;
 
@@ -30,6 +38,19 @@ pub trait TryStreamies: TryStream {
         Self: Sized + TryStreamExt,
     {
         TryCollectVec::new(self.try_collect())
+    }
+
+    fn transpose_err_future<T, E, FutErr, F, I>(self) -> Map<Self, F>
+    where
+        Self: Sized + StreamExt + Stream<Item = Result<T, FutErr>>,
+        FutErr: Future<Output = E> + FutureExt,
+        F: FnMut(Result<T, FutErr>) -> I,
+        I: Future,
+    {
+        self.map(|result: Result<T, FutErr>| match result {
+            Ok(v) => return ready(Ok(v)),
+            Err(fut_err) => return fut_err.then(|err| Err(err)),
+        })
     }
 }
 

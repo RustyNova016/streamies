@@ -1,3 +1,4 @@
+pub mod future_utils;
 pub mod streamies;
 pub mod try_streamies;
 
