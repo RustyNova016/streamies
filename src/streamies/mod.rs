@@ -1,9 +1,13 @@
+use core::future::Future;
+
 use futures::Stream;
 use futures::StreamExt;
 
+pub use await_value::AwaitValue;
 pub use collect_vec::CollectVec;
 pub use merge_round_robin::MergeRoundRobin;
 
+pub mod await_value;
 pub mod collect_vec;
 pub mod merge_round_robin;
 
@@ -67,6 +71,42 @@ pub trait Streamies: Stream {
         Self: Sized,
     {
         CollectVec::new(self.collect())
+    }
+
+    /// Await the item, turning it from a future to the output value
+    ///
+    /// > ⚠️ This prevents other items to get polled until the current future is resolved,
+    /// > essentially resolving futures 1 by 1 **without** concurency. 
+    /// >
+    /// > If you need **concurency**, use [`StreamExt::buffered`]
+    /// >
+    /// > If you need **parallelism**, map the future to a task, and use [`StreamExt::buffered`]
+    ///
+    /// ```
+    /// # futures::executor::block_on(async {
+    /// use core::future::ready;
+    /// use futures::stream::{self, StreamExt};
+    /// use streamies::Streamies as _;
+    ///
+    /// let stream = stream::iter(vec![1, 2, 3]);
+    ///
+    /// // Execute an async function on the items,
+    /// // turning it in a stream of futures
+    /// let stream = stream.map(|n| ready(n * 2));
+    ///
+    /// // Then turn it back to a stream of number
+    /// let stream = stream.await_value();
+    ///
+    /// let result = stream.collect_vec().await;
+    /// assert_eq!(result, vec![2, 4, 6]);
+    /// # });
+    /// ```
+    fn await_value(self) -> AwaitValue<Self>
+    where
+        Self: Stream + Sized,
+        Self::Item: Future + Unpin,
+    {
+        AwaitValue::new(self)
     }
 }
 
