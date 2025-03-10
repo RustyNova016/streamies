@@ -1,3 +1,4 @@
+pub mod try_and;
 use futures::TryStream;
 use futures::TryStreamExt;
 
