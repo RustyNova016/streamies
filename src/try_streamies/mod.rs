@@ -1,3 +1,4 @@
+pub mod nullify_err;
 use futures::TryStream;
 use futures::TryStreamExt;
 
