@@ -1,9 +1,13 @@
+pub mod flatten_ok;
+use futures::Stream;
 use futures::TryStream;
 use futures::TryStreamExt;
 
 pub use extract_ok_future::ExtractFutureOk;
 pub use try_collect_vec::TryCollectVec;
 pub use try_ready_result::TryReadyChunksResult;
+
+use crate::flatten_ok::FlattenOk;
 
 pub mod extract_ok_future;
 pub mod try_collect_vec;
@@ -108,6 +112,45 @@ pub trait TryStreamies: TryStream {
         Self: Sized + TryStreamExt,
     {
         ExtractFutureOk::new(self)
+    }
+
+    /// Flattens a stream of streams into just one continuous stream.
+    ///
+    /// Values yielded by the inner streams will get assigned to `Ok` values,
+    /// while `Err` values will pass through
+    ///
+    /// The difference between this combinator and [`try_flatten`](futures::stream::TryStreamExt::try_flatten)
+    /// is that it doesn't flatten `Err` values if the inner stream return
+    /// `Result`s
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # futures::executor::block_on(async {
+    /// use streamies::TryStreamies as _;
+    /// use futures::stream::{self, StreamExt, TryStreamExt};
+    /// use std::thread;
+    ///
+    /// let foo = stream::iter(vec![1, 2 ,3]);
+    /// let bar = stream::iter(vec![5, 6]);
+    /// let mut baz = stream::iter(vec![Ok(foo), Err(4), Ok(bar)])
+    ///     .flatten_ok();
+    ///
+    /// assert_eq!(baz.next().await, Some(Ok(1)));
+    /// assert_eq!(baz.next().await, Some(Ok(2)));
+    /// assert_eq!(baz.next().await, Some(Ok(3)));
+    /// assert_eq!(baz.next().await, Some(Err(4)));
+    /// assert_eq!(baz.next().await, Some(Ok(5)));
+    /// assert_eq!(baz.next().await, Some(Ok(6)));
+    /// assert_eq!(baz.next().await, None);
+    /// # });
+    /// ```
+    fn flatten_ok(self) -> FlattenOk<Self>
+    where
+        Self::Ok: Stream,
+        Self: Sized,
+    {
+        FlattenOk::new(self)
     }
 }
 
