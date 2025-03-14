@@ -1,9 +1,11 @@
 use futures::TryStream;
 use futures::TryStreamExt;
 
+pub use extract_ok_future::ExtractFutureOk;
 pub use try_collect_vec::TryCollectVec;
 pub use try_ready_result::TryReadyChunksResult;
 
+pub mod extract_ok_future;
 pub mod try_collect_vec;
 pub mod try_ready_result;
 
@@ -59,7 +61,7 @@ pub trait TryStreamies: TryStream {
     ///
     /// ```
     /// # futures::executor::block_on(async {
-    /// use futures::stream::{self, TryReadyChunksError, TryStreamExt};
+    /// use futures::stream::{self, TryStreamExt};
     /// use streamies::TryStreamies as _;
     ///
     /// let stream = stream::iter(vec![Ok::<i32, i32>(1), Ok(2), Ok(3), Err(4), Err(5), Ok(6), Ok(7)]);
@@ -81,6 +83,31 @@ pub trait TryStreamies: TryStream {
         Self: Sized + TryStreamExt,
     {
         TryReadyChunksResult::new(self, cap)
+    }
+
+    /// Extract the future of the `Ok` value out of the result.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # futures::executor::block_on(async {
+    /// use core::future::{Ready, ready};
+    /// use futures::stream::{self, StreamExt, TryStreamExt};
+    /// use streamies::TryStreamies as _;
+    ///
+    /// let stream = stream::iter(vec![Ok::<Ready<i32>, i32>(ready(1)), Ok(ready(2)), Err(3)]);
+    /// let mut stream = stream.extract_future_ok().buffer_unordered(1);
+    ///
+    /// assert_eq!(stream.next().await.unwrap(), Ok(1));    
+    /// assert_eq!(stream.next().await.unwrap(), Ok(2));  
+    /// assert_eq!(stream.next().await.unwrap(), Err(3));  
+    /// # })
+    /// ```
+    fn extract_future_ok(self) -> ExtractFutureOk<Self>
+    where
+        Self: Sized + TryStreamExt,
+    {
+        ExtractFutureOk::new(self)
     }
 }
 
