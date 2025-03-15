@@ -76,6 +76,7 @@ pub trait TryStreamies: TryStream {
     /// assert_eq!(stream.try_next().await, Err(4));
     /// assert_eq!(stream.try_next().await, Err(5));               // Consecutive errors are yielded 1 by 1
     /// assert_eq!(stream.try_next().await, Ok(Some(vec![6, 7])));
+    /// assert_eq!(stream.try_next().await, Ok(None));
     /// # })
     /// ```
     ///

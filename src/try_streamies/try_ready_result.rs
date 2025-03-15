@@ -15,7 +15,8 @@ pin_project! {
         #[pin]
         stream: St,
         cap: usize,
-        error: Option<St::Error>
+        error: Option<St::Error>,
+        done: bool,
     }
 }
 
@@ -28,6 +29,7 @@ where
             stream,
             cap,
             error: None,
+            done: false,
         }
     }
 }
@@ -53,6 +55,10 @@ where
         // Return the error of the previous poll
         if let Some(err) = this.error.take() {
             return Poll::Ready(Some(Err(err)));
+        }
+
+        if *this.done {
+            return Poll::Ready(None);
         }
 
         let mut items = Vec::new();
@@ -98,6 +104,9 @@ where
                     if items.is_empty() {
                         return Poll::Ready(None);
                     }
+
+                    // Flag the stream as over
+                    *this.done = true;
 
                     return Poll::Ready(Some(Ok(items)));
                 }
