@@ -1,5 +1,6 @@
 pub mod chunks_ok;
 pub mod flatten_ok;
+pub mod flatten_result;
 use futures::Stream;
 use futures::TryStream;
 use futures::TryStreamExt;
@@ -7,6 +8,7 @@ use futures::TryStreamExt;
 pub use crate::chunks_ok::ChunksOk;
 pub use crate::extract_ok_future::ExtractFutureOk;
 pub use crate::flatten_ok::FlattenOk;
+use crate::flatten_result::FlattenResult;
 pub use crate::try_collect_vec::TryCollectVec;
 pub use crate::try_ready_result::ReadyChunksOk;
 
@@ -181,14 +183,14 @@ pub trait TryStreamies: TryStream {
     /// use futures::stream::{self, TryStreamExt};
     /// use streamies::TryStreamies as _;
     ///
-    /// let stream = stream::iter(vec![Ok::<i32, i32>(1), Ok(2), Ok(3), Err(4), Err(5), Ok(6), Ok(7)]);
+    /// let stream = stream::iter(vec![Ok::<i32, i32>(1), Ok(2), Ok(3), Err(4), Err(5), Ok(6)]);
     /// let mut stream = stream.chunks_ok(2);
     ///
     /// assert_eq!(stream.try_next().await, Ok(Some(vec![1, 2])));    
     /// assert_eq!(stream.try_next().await, Ok(Some(vec![3])));    // The next value is an error, so couldn't fill the vec
     /// assert_eq!(stream.try_next().await, Err(4));
     /// assert_eq!(stream.try_next().await, Err(5));               // Consecutive errors are yielded 1 by 1
-    /// assert_eq!(stream.try_next().await, Ok(Some(vec![6, 7])));
+    /// assert_eq!(stream.try_next().await, Ok(Some(vec![6])));
     /// assert_eq!(stream.try_next().await, Ok(None));
     /// # })
     /// ```
@@ -201,6 +203,31 @@ pub trait TryStreamies: TryStream {
         Self: Sized + TryStreamExt,
     {
         ChunksOk::new(self, cap)
+    }
+
+    /// Flatten the result from the `Ok` value into the stream
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # futures::executor::block_on(async {
+    /// use futures::stream::{self, TryStreamExt, StreamExt};
+    /// use streamies::TryStreamies as _;
+    ///
+    /// let stream = stream::iter(vec![Ok::<Result<i32, i32>, i32>(Ok::<i32, i32>(1)), Ok(Err(2)), Err(3)]);
+    /// let mut stream = stream.flatten_result_ok();
+    ///
+    /// assert_eq!(stream.next().await, Some(Ok(1)));
+    /// assert_eq!(stream.next().await, Some(Err(2)));
+    /// assert_eq!(stream.next().await, Some(Err(3)));
+    /// assert_eq!(stream.next().await, None);
+    /// # })
+    /// ```
+    fn flatten_result_ok<T>(self) -> FlattenResult<Self>
+    where
+        Self: TryStream + Stream<Item = Result<Result<T, Self::Error>, Self::Error>> + Sized,
+    {
+        FlattenResult::new(self)
     }
 }
 
