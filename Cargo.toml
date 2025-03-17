@@ -1,7 +1,7 @@
 [package]
 name = "streamies"
 description = "More features for your streams"
-version = "0.1.6"
+version = "0.2.0"
 authors = ["RustyNova"]
 repository = "https://github.com/RustyNova016/streamies"
 readme = "README.md"

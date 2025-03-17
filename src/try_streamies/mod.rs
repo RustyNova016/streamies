@@ -1,13 +1,14 @@
+pub mod chunks_ok;
 pub mod flatten_ok;
 use futures::Stream;
 use futures::TryStream;
 use futures::TryStreamExt;
 
-pub use extract_ok_future::ExtractFutureOk;
-pub use try_collect_vec::TryCollectVec;
-pub use try_ready_result::TryReadyChunksResult;
-
-use crate::flatten_ok::FlattenOk;
+pub use crate::chunks_ok::ChunksOk;
+pub use crate::extract_ok_future::ExtractFutureOk;
+pub use crate::flatten_ok::FlattenOk;
+pub use crate::try_collect_vec::TryCollectVec;
+pub use crate::try_ready_result::ReadyChunksOk;
 
 pub mod extract_ok_future;
 pub mod try_collect_vec;
@@ -26,7 +27,7 @@ pub trait TryStreamies: TryStream {
     /// let result = stream.try_collect_vec().await; // No need for ...: Result<Vec<_>, _>!
     /// assert_eq!(result, Ok(vec![1, 2, 3]));
     ///
-    /// // However, this will resul in an error value
+    /// // However, this will result in an error value
     /// let stream = stream::iter(vec![Ok(1), Err("uh oh"), Ok(3)]);
     ///
     /// let result = stream.try_collect_vec().await;
@@ -69,7 +70,7 @@ pub trait TryStreamies: TryStream {
     /// use streamies::TryStreamies as _;
     ///
     /// let stream = stream::iter(vec![Ok::<i32, i32>(1), Ok(2), Ok(3), Err(4), Err(5), Ok(6), Ok(7)]);
-    /// let mut stream = stream.try_ready_chunks_result(2);
+    /// let mut stream = stream.ready_chunks_ok(2);
     ///
     /// assert_eq!(stream.try_next().await, Ok(Some(vec![1, 2])));    
     /// assert_eq!(stream.try_next().await, Ok(Some(vec![3])));    // The next value is an error, so couldn't fill the vec
@@ -83,11 +84,11 @@ pub trait TryStreamies: TryStream {
     /// # Panics
     ///
     /// This method will panic if `capacity` is zero.
-    fn try_ready_chunks_result(self, cap: usize) -> TryReadyChunksResult<Self>
+    fn ready_chunks_ok(self, cap: usize) -> ReadyChunksOk<Self>
     where
         Self: Sized + TryStreamExt,
     {
-        TryReadyChunksResult::new(self, cap)
+        ReadyChunksOk::new(self, cap)
     }
 
     /// Extract the future of the `Ok` value out of the result.
@@ -152,6 +153,54 @@ pub trait TryStreamies: TryStream {
         Self: Sized,
     {
         FlattenOk::new(self)
+    }
+
+    /// An adaptor for chunking up items of the stream inside a vector.
+    ///
+    /// This combinator will attempt to pull `Ok` items from this stream and buffer
+    /// them into a local vector. At most `capacity` items will get buffered
+    /// before they're yielded from the returned stream.
+    ///
+    /// Encountering an `Err` value result in a early return of the storead chunk,
+    /// then the error in the next poll
+    ///
+    /// Note that the vectors returned from this iterator may not always have
+    /// `capacity` elements. If the underlying stream ended and only a partial
+    /// vector was created, it'll be returned. Additionally if an error happens
+    /// from the underlying stream then the currently buffered items will be
+    /// yielded.
+    ///
+    /// # Panics
+    ///
+    /// This method will panic if `capacity` is zero.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # futures::executor::block_on(async {
+    /// use futures::stream::{self, TryStreamExt};
+    /// use streamies::TryStreamies as _;
+    ///
+    /// let stream = stream::iter(vec![Ok::<i32, i32>(1), Ok(2), Ok(3), Err(4), Err(5), Ok(6), Ok(7)]);
+    /// let mut stream = stream.chunks_ok(2);
+    ///
+    /// assert_eq!(stream.try_next().await, Ok(Some(vec![1, 2])));    
+    /// assert_eq!(stream.try_next().await, Ok(Some(vec![3])));    // The next value is an error, so couldn't fill the vec
+    /// assert_eq!(stream.try_next().await, Err(4));
+    /// assert_eq!(stream.try_next().await, Err(5));               // Consecutive errors are yielded 1 by 1
+    /// assert_eq!(stream.try_next().await, Ok(Some(vec![6, 7])));
+    /// assert_eq!(stream.try_next().await, Ok(None));
+    /// # })
+    /// ```
+    ///
+    /// # Panics
+    ///
+    /// This method will panic if `capacity` is zero.
+    fn chunks_ok(self, cap: usize) -> ChunksOk<Self>
+    where
+        Self: Sized + TryStreamExt,
+    {
+        ChunksOk::new(self, cap)
     }
 }
 

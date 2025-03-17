@@ -11,7 +11,7 @@ pin_project! {
     /// Stream for the [`merge_round_robin`](crate::Streamies::merge_round_robin) method.
     #[derive(Debug)]
     #[must_use = "streams do nothing unless polled"]
-    pub struct ReadyChunksOk<St> where St: TryStream{
+    pub struct ChunksOk<St> where St: TryStream{
         #[pin]
         stream: St,
         cap: usize,
@@ -20,7 +20,7 @@ pin_project! {
     }
 }
 
-impl<St> ReadyChunksOk<St>
+impl<St> ChunksOk<St>
 where
     St: TryStream,
 {
@@ -34,7 +34,7 @@ where
     }
 }
 
-impl<St> FusedStream for ReadyChunksOk<St>
+impl<St> FusedStream for ChunksOk<St>
 where
     St: FusedStream + TryStream + Stream<Item = Result<St::Ok, St::Error>>,
 {
@@ -43,7 +43,7 @@ where
     }
 }
 
-impl<St> Stream for ReadyChunksOk<St>
+impl<St> Stream for ChunksOk<St>
 where
     St: TryStream + Stream<Item = Result<St::Ok, St::Error>>, // Stream bound for the TryStream to have a Result item
 {
@@ -65,15 +65,8 @@ where
 
         loop {
             match this.stream.as_mut().poll_next(cx) {
-                // Flush all collected data if underlying stream doesn't contain
-                // more ready values
-                Poll::Pending => {
-                    return if items.is_empty() {
-                        Poll::Pending
-                    } else {
-                        Poll::Ready(Some(Ok(items)))
-                    }
-                }
+                // Can't do more
+                Poll::Pending => return Poll::Pending,
 
                 // Push the ready item into the buffer and check whether it is full.
                 // If so, replace our buffer with a new and empty one and return
