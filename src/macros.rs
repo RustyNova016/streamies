@@ -12,3 +12,19 @@ macro_rules! ready_some {
         }
     };
 }
+
+/// This macro extract the value from a `Poll::Ready(Some(Ok(_)))`
+///
+/// If the value doesn't correspond to it, early return the value. Aka:
+/// - Poll::Pending
+/// - Poll::Ready(None)
+/// - Poll::Ready(Some(Err(_)))
+#[macro_export]
+macro_rules! ready_some_ok {
+    ($e:expr $(,)?) => {
+        match ready_some!($e) {
+            Ok(t) => t,
+            Err(err) => return futures::task::Poll::Ready(Some(Err(err))),
+        }
+    };
+}

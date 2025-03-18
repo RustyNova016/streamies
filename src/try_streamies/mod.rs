@@ -1,6 +1,5 @@
-pub mod chunks_ok;
-pub mod flatten_ok;
-pub mod flatten_result;
+use core::hash::Hash;
+
 use futures::Stream;
 use futures::TryStream;
 use futures::TryStreamExt;
@@ -8,13 +7,20 @@ use futures::TryStreamExt;
 pub use crate::chunks_ok::ChunksOk;
 pub use crate::extract_ok_future::ExtractFutureOk;
 pub use crate::flatten_ok::FlattenOk;
-use crate::flatten_result::FlattenResult;
+pub use crate::flatten_result::FlattenResult;
 pub use crate::try_collect_vec::TryCollectVec;
 pub use crate::try_ready_result::ReadyChunksOk;
+pub use crate::unique_by_ok::UniqueByOk;
+pub use crate::unique_ok::UniqueOk;
 
+pub mod chunks_ok;
 pub mod extract_ok_future;
+pub mod flatten_ok;
+pub mod flatten_result;
 pub mod try_collect_vec;
 pub mod try_ready_result;
+pub mod unique_by_ok;
+pub mod unique_ok;
 
 pub trait TryStreamies: TryStream {
     /// Collect the stream into a vec.
@@ -228,6 +234,79 @@ pub trait TryStreamies: TryStream {
         Self: TryStream + Stream<Item = Result<Result<T, Self::Error>, Self::Error>> + Sized,
     {
         FlattenResult::new(self)
+    }
+
+    /// Return an stream adaptor that filters out `Ok` values that have
+    /// already been produced once during the iteration.
+    ///
+    /// `Err` values pass through unaffected
+    ///
+    /// Duplicates are detected by comparing the key they map to
+    /// with the keying function `f` by hash and equality.
+    /// The keys are stored in a hash set in the stream.
+    ///
+    /// The stream is stable, returning the non-duplicate items in the order
+    /// in which they occur in the adapted stream. In a set of duplicate
+    /// items, the first item encountered is the item retained.
+    ///
+    /// ```
+    /// # futures::executor::block_on(async {
+    /// use futures::stream::{self, StreamExt};
+    /// use streamies::TryStreamies as _;
+    ///
+    /// let data = vec![Ok("a"), Ok("bb"), Ok("aa"), Err("c"), Ok("ccc")];
+    /// let mut stream = stream::iter(data).unique_by_ok(|s| s.len());
+    /// assert_eq!(stream.next().await, Some(Ok("a")));
+    /// assert_eq!(stream.next().await, Some(Ok("bb")));
+    /// assert_eq!(stream.next().await, Some(Err("c")));
+    /// assert_eq!(stream.next().await, Some(Ok("ccc")));
+    /// assert_eq!(stream.next().await, None);
+    /// # });
+    /// ```
+    fn unique_by_ok<F, V>(self, f: F) -> UniqueByOk<Self, V, F>
+    where
+        Self: TryStream + Sized,
+        V: Eq + Hash,
+        F: FnMut(&Self::Ok) -> V,
+    {
+        UniqueByOk::new(self, f)
+    }
+
+    /// Return an stream adaptor that filters out `Ok` values that have
+    /// already been produced once during the iteration. Duplicates
+    /// are detected using hash and equality.
+    ///
+    /// `Err` values pass through unaffected
+    ///
+    /// Clones of visited elements are stored in a hash set in the
+    /// stream.
+    ///
+    /// The stream is stable, returning the non-duplicate items in the order
+    /// in which they occur in the adapted stream. In a set of duplicate
+    /// items, the first item encountered is the item retained.
+    ///
+    /// ```
+    /// # futures::executor::block_on(async {
+    /// use futures::stream::{self, StreamExt};
+    /// use streamies::TryStreamies as _;
+    ///
+    /// let data = vec![Ok(10), Ok(20), Ok(30), Ok(20), Ok(40), Err(10), Ok(50)];
+    /// let mut stream = stream::iter(data).unique_ok();
+    /// assert_eq!(stream.next().await, Some(Ok(10)));
+    /// assert_eq!(stream.next().await, Some(Ok(20)));
+    /// assert_eq!(stream.next().await, Some(Ok(30)));
+    /// assert_eq!(stream.next().await, Some(Ok(40)));
+    /// assert_eq!(stream.next().await, Some(Err(10)));
+    /// assert_eq!(stream.next().await, Some(Ok(50)));
+    /// assert_eq!(stream.next().await, None);
+    /// # });
+    /// ```
+    fn unique_ok(self) -> UniqueOk<Self>
+    where
+        Self: Sized,
+        Self::Ok: Eq + Hash + Clone,
+    {
+        UniqueOk::new(self)
     }
 }
 
