@@ -6,8 +6,9 @@ use futures::TryStreamExt;
 
 pub use crate::chunks_ok::ChunksOk;
 pub use crate::extract_ok_future::ExtractFutureOk;
-pub use crate::flatten_ok::FlattenOk;
-pub use crate::flatten_result::FlattenResult;
+use crate::flatten_ok_iter::FlattenOkIter;
+pub use crate::flatten_ok_result::FlattenOkResult;
+pub use crate::flatten_ok_stream::FlattenOkStream;
 pub use crate::try_collect_vec::TryCollectVec;
 pub use crate::try_ready_result::ReadyChunksOk;
 pub use crate::unique_by_ok::UniqueByOk;
@@ -15,8 +16,9 @@ pub use crate::unique_ok::UniqueOk;
 
 pub mod chunks_ok;
 pub mod extract_ok_future;
-pub mod flatten_ok;
-pub mod flatten_result;
+pub mod flatten_ok_iter;
+pub mod flatten_ok_result;
+pub mod flatten_ok_stream;
 pub mod try_collect_vec;
 pub mod try_ready_result;
 pub mod unique_by_ok;
@@ -124,6 +126,64 @@ pub trait TryStreamies: TryStream {
         ExtractFutureOk::new(self)
     }
 
+    /// Flatten the result from the `Ok` value into the stream
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # futures::executor::block_on(async {
+    /// use futures::stream::{self, TryStreamExt, StreamExt};
+    /// use streamies::TryStreamies as _;
+    ///
+    /// let stream = stream::iter(vec![Ok::<Result<i32, i32>, i32>(Ok::<i32, i32>(1)), Ok(Err(2)), Err(3)]);
+    /// let mut stream = stream.flatten_ok_result();
+    ///
+    /// assert_eq!(stream.next().await, Some(Ok(1)));
+    /// assert_eq!(stream.next().await, Some(Err(2)));
+    /// assert_eq!(stream.next().await, Some(Err(3)));
+    /// assert_eq!(stream.next().await, None);
+    /// # })
+    /// ```
+    fn flatten_ok_result<T>(self) -> FlattenOkResult<Self>
+    where
+        Self: TryStream + Stream<Item = Result<Result<T, Self::Error>, Self::Error>> + Sized,
+    {
+        FlattenOkResult::new(self)
+    }
+
+    /// Flatten a stream of `Result<impl IntoIterator<T>, E>` into `Result<T, E>`. Items are yielded in the order of the Iterator
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # futures::executor::block_on(async {
+    /// use futures::stream::{self, StreamExt};
+    /// use streamies::TryStreamies as _;
+    ///
+    /// let a = 0..3;
+    /// let b = 10..13;
+    ///
+    /// let mut stream = stream::iter(vec![Ok::<_, ()>(a), Err(()), Ok(b)]).flatten_ok_iter();
+    ///
+    /// assert_eq!(stream.next().await, Some(Ok(0)));
+    /// assert_eq!(stream.next().await, Some(Ok(1)));
+    /// assert_eq!(stream.next().await, Some(Ok(2)));
+    /// assert_eq!(stream.next().await, Some(Err(())));
+    /// assert_eq!(stream.next().await, Some(Ok(10)));
+    /// assert_eq!(stream.next().await, Some(Ok(11)));
+    /// assert_eq!(stream.next().await, Some(Ok(12)));
+    /// assert_eq!(stream.next().await, None);
+    /// # });
+    /// ```
+    fn flatten_ok_iter<It>(self) -> FlattenOkIter<Self, It>
+    where
+        Self: Sized,
+        Self::Ok: IntoIterator<IntoIter = It>,
+        It: Iterator,
+    {
+        FlattenOkIter::new(self)
+    }
+
     /// Flattens a stream of streams into just one continuous stream.
     ///
     /// Values yielded by the inner streams will get assigned to `Ok` values,
@@ -144,7 +204,7 @@ pub trait TryStreamies: TryStream {
     /// let foo = stream::iter(vec![1, 2 ,3]);
     /// let bar = stream::iter(vec![5, 6]);
     /// let mut baz = stream::iter(vec![Ok(foo), Err(4), Ok(bar)])
-    ///     .flatten_ok();
+    ///     .flatten_ok_stream();
     ///
     /// assert_eq!(baz.next().await, Some(Ok(1)));
     /// assert_eq!(baz.next().await, Some(Ok(2)));
@@ -155,12 +215,12 @@ pub trait TryStreamies: TryStream {
     /// assert_eq!(baz.next().await, None);
     /// # });
     /// ```
-    fn flatten_ok(self) -> FlattenOk<Self>
+    fn flatten_ok_stream(self) -> FlattenOkStream<Self>
     where
         Self::Ok: Stream,
         Self: Sized,
     {
-        FlattenOk::new(self)
+        FlattenOkStream::new(self)
     }
 
     /// An adaptor for chunking up items of the stream inside a vector.
@@ -209,31 +269,6 @@ pub trait TryStreamies: TryStream {
         Self: Sized + TryStreamExt,
     {
         ChunksOk::new(self, cap)
-    }
-
-    /// Flatten the result from the `Ok` value into the stream
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # futures::executor::block_on(async {
-    /// use futures::stream::{self, TryStreamExt, StreamExt};
-    /// use streamies::TryStreamies as _;
-    ///
-    /// let stream = stream::iter(vec![Ok::<Result<i32, i32>, i32>(Ok::<i32, i32>(1)), Ok(Err(2)), Err(3)]);
-    /// let mut stream = stream.flatten_result_ok();
-    ///
-    /// assert_eq!(stream.next().await, Some(Ok(1)));
-    /// assert_eq!(stream.next().await, Some(Err(2)));
-    /// assert_eq!(stream.next().await, Some(Err(3)));
-    /// assert_eq!(stream.next().await, None);
-    /// # })
-    /// ```
-    fn flatten_result_ok<T>(self) -> FlattenResult<Self>
-    where
-        Self: TryStream + Stream<Item = Result<Result<T, Self::Error>, Self::Error>> + Sized,
-    {
-        FlattenResult::new(self)
     }
 
     /// Return an stream adaptor that filters out `Ok` values that have

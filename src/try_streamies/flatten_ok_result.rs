@@ -1,5 +1,4 @@
 use core::pin::Pin;
-use core::task::ready;
 use core::task::Context;
 use core::task::Poll;
 
@@ -8,11 +7,13 @@ use futures::Stream;
 use futures::TryStream;
 use pin_project_lite::pin_project;
 
+use crate::ready_some;
+
 pin_project! {
     /// Stream for the [`try_flatten`](super::TryStreamExt::try_flatten) method.
     #[derive(Debug)]
     #[must_use = "streams do nothing unless polled"]
-    pub struct FlattenOk<St>
+    pub struct FlattenOkResult<St>
     where
         St: TryStream,
     {
@@ -23,10 +24,9 @@ pin_project! {
     }
 }
 
-impl<St> FlattenOk<St>
+impl<St> FlattenOkResult<St>
 where
     St: TryStream,
-    St::Ok: Stream,
 {
     pub(super) fn new(stream: St) -> Self {
         Self {
@@ -36,9 +36,9 @@ where
     }
 }
 
-impl<St> FusedStream for FlattenOk<St>
+impl<St, T> FusedStream for FlattenOkResult<St>
 where
-    St: TryStream + FusedStream,
+    St: TryStream + Stream<Item = Result<Result<T, St::Error>, St::Error>> + FusedStream,
     St::Ok: Stream,
 {
     fn is_terminated(&self) -> bool {
@@ -46,27 +46,18 @@ where
     }
 }
 
-impl<St> Stream for FlattenOk<St>
+impl<St, T> Stream for FlattenOkResult<St>
 where
-    St: TryStream,
-    St::Ok: Stream,
+    St: TryStream + Stream<Item = Result<Result<T, St::Error>, St::Error>>,
 {
-    type Item = Result<<St::Ok as Stream>::Item, St::Error>;
+    type Item = Result<T, St::Error>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let mut this = self.project();
+        let this = self.project();
 
-        Poll::Ready(loop {
-            if let Some(inner_stream) = this.inner_stream.as_mut().as_pin_mut() {
-                match ready!(inner_stream.poll_next(cx)) {
-                    Some(item) => break Some(Ok(item)),
-                    None => this.inner_stream.set(None),
-                }
-            } else if let Some(s) = ready!(this.stream.as_mut().try_poll_next(cx)?) {
-                this.inner_stream.set(Some(s));
-            } else {
-                break None;
-            }
-        })
+        match ready_some!(this.stream.poll_next(cx)) {
+            Ok(Ok(val)) => Poll::Ready(Some(Ok(val))),
+            Err(err) | Ok(Err(err)) => Poll::Ready(Some(Err(err))),
+        }
     }
 }
