@@ -1,4 +1,5 @@
 use core::pin::Pin;
+use core::task::ready;
 use core::task::Context;
 use core::task::Poll;
 
@@ -7,13 +8,11 @@ use futures::Stream;
 use futures::TryStream;
 use pin_project_lite::pin_project;
 
-use crate::ready_some;
-
 pin_project! {
     /// Stream for the [`try_flatten`](super::TryStreamExt::try_flatten) method.
     #[derive(Debug)]
     #[must_use = "streams do nothing unless polled"]
-    pub struct FlattenResult<St>
+    pub struct FlattenOkStream<St>
     where
         St: TryStream,
     {
@@ -24,9 +23,10 @@ pin_project! {
     }
 }
 
-impl<St> FlattenResult<St>
+impl<St> FlattenOkStream<St>
 where
     St: TryStream,
+    St::Ok: Stream,
 {
     pub(super) fn new(stream: St) -> Self {
         Self {
@@ -36,9 +36,9 @@ where
     }
 }
 
-impl<St, T> FusedStream for FlattenResult<St>
+impl<St> FusedStream for FlattenOkStream<St>
 where
-    St: TryStream + Stream<Item = Result<Result<T, St::Error>, St::Error>> + FusedStream,
+    St: TryStream + FusedStream,
     St::Ok: Stream,
 {
     fn is_terminated(&self) -> bool {
@@ -46,18 +46,27 @@ where
     }
 }
 
-impl<St, T> Stream for FlattenResult<St>
+impl<St> Stream for FlattenOkStream<St>
 where
-    St: TryStream + Stream<Item = Result<Result<T, St::Error>, St::Error>>,
+    St: TryStream,
+    St::Ok: Stream,
 {
-    type Item = Result<T, St::Error>;
+    type Item = Result<<St::Ok as Stream>::Item, St::Error>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let this = self.project();
+        let mut this = self.project();
 
-        match ready_some!(this.stream.poll_next(cx)) {
-            Ok(Ok(val)) => Poll::Ready(Some(Ok(val))),
-            Err(err) | Ok(Err(err)) => Poll::Ready(Some(Err(err))),
-        }
+        Poll::Ready(loop {
+            if let Some(inner_stream) = this.inner_stream.as_mut().as_pin_mut() {
+                match ready!(inner_stream.poll_next(cx)) {
+                    Some(item) => break Some(Ok(item)),
+                    None => this.inner_stream.set(None),
+                }
+            } else if let Some(s) = ready!(this.stream.as_mut().try_poll_next(cx)?) {
+                this.inner_stream.set(Some(s));
+            } else {
+                break None;
+            }
+        })
     }
 }
