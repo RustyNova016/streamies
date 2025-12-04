@@ -6,9 +6,9 @@
 #[macro_export]
 macro_rules! ready_some {
     ($e:expr $(,)?) => {
-        match futures::ready!($e) {
+        match core::task::ready!($e) {
             Some(t) => t,
-            None => return futures::task::Poll::Ready(None),
+            None => return core::task::Poll::Ready(None),
         }
     };
 }
@@ -24,7 +24,7 @@ macro_rules! ready_some_ok {
     ($e:expr $(,)?) => {
         match ready_some!($e) {
             Ok(t) => t,
-            Err(err) => return futures::task::Poll::Ready(Some(Err(err))),
+            Err(err) => return core::task::Poll::Ready(Some(Err(err))),
         }
     };
 }
