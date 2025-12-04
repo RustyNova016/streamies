@@ -21,3 +21,6 @@ default = ["futures"]
 
 smol = ["dep:futures-lite"]
 futures = ["dep:futures"]
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
