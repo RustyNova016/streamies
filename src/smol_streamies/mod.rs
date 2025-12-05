@@ -32,3 +32,5 @@ pub trait SmolStreamies: Stream {
         ReadyChunks::new(self, capacity)
     }
 }
+
+impl<T> SmolStreamies for T where T: Stream {}

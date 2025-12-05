@@ -1,3 +1,8 @@
+## [0.3.1] - 2025-12-05
+
+### 🐛 Bug Fixes
+
+- Impl SmolStreamies for Stream
 ## [0.3.0] - 2025-12-04
 
 ### 🚀 Features
@@ -28,3 +33,5 @@
 ### ⚙️ Miscellaneous Tasks
 
 - Add ci
+- Release v0.3.0
+- Crates.io arguments
